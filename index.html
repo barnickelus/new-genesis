@@ -135,6 +135,15 @@
     text-shadow:0 0 10px rgba(124,240,208,.6); animation:floatUp 1s ease-out forwards; z-index:4}
   @keyframes floatUp{from{opacity:1; transform:translateY(0)}to{opacity:0; transform:translateY(-46px)}}
 
+  /* achievements */
+  .achgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin-bottom:20px}
+  .ach{border:1px solid var(--panel-edge); border-radius:10px; padding:9px 10px; background:var(--panel)}
+  .ach.locked{opacity:.35; filter:grayscale(.8)}
+  .ach .an{font-size:12px; font-weight:600; color:var(--gold)}
+  .ach .ad{font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.3}
+  .spark{color:var(--gold)}
+  button.evolve.gold{background:linear-gradient(90deg,var(--gold),var(--accent2))}
+
   @media (max-width:880px){
     .app{grid-template-columns:1fr; grid-template-rows:auto auto 1fr}
     .play{grid-column:1; grid-row:2}
@@ -156,6 +165,7 @@
       <div class="topstat"><div class="k">Era</div><div class="v accent" id="topEra">The Void</div></div>
       <div class="topstat"><div class="k">Lineage Depth</div><div class="v" id="topStage">0 / 10</div></div>
       <div class="topstat"><div class="k">Evolution Drive</div><div class="v" id="topMult">×1.00</div></div>
+      <div class="topstat" id="sparkStat" style="display:none"><div class="k">Sparks</div><div class="v spark" id="topSparks">✶ 0</div></div>
     </div>
   </header>
 
@@ -175,6 +185,7 @@
   <aside class="rail">
     <div class="tabs">
       <div class="tab active" data-tab="traits">Traits</div>
+      <div class="tab" data-tab="mutate">Mutate</div>
       <div class="tab" data-tab="evolve">Evolve</div>
       <div class="tab" data-tab="codex">Codex</div>
     </div>
@@ -193,6 +204,7 @@
 
 <div class="toast" id="toast"></div>
 <div class="footer-controls">
+  <button id="muteBtn">Sound: On</button>
   <button id="saveBtn">Save</button>
   <button id="resetBtn">Reset Universe</button>
 </div>
@@ -273,6 +285,65 @@ const TRAITS = [
     desc:"Forces that reshape reality itself." },
 ];
 
+// ---- Mutations: one-off tech-tree upgrades -------------------
+// Cost is a fraction of the current era's threshold, so they stay
+// relevant whenever you buy them. They persist through Evolve and
+// are only washed away by Transcendence.
+const UPGRADES = [
+  { id:"u0",  icon:"◬", name:"Adaptive Metabolism",  frac:0.05, unlock:0,  type:"click", val:2,
+    desc:"Every act of consumption yields more." },
+  { id:"u1",  icon:"◉", name:"Efficient Osmosis",    frac:0.08, unlock:0,  type:"trait", trait:"t0", val:3,
+    desc:"Your smallest forms drink the world directly." },
+  { id:"u2",  icon:"⌬", name:"Symbiosis",            frac:0.09, unlock:1,  type:"trait", trait:"t1", val:3,
+    desc:"Two lives entwine; both are amplified." },
+  { id:"u3",  icon:"❉", name:"Genetic Memory",       frac:0.15, unlock:1,  type:"prod",  val:1.5,
+    desc:"What is learned is never fully lost." },
+  { id:"u4",  icon:"⌖", name:"Sharpened Senses",     frac:0.12, unlock:2,  type:"click", val:3,
+    desc:"The world comes into focus — and into reach." },
+  { id:"u5",  icon:"⏣", name:"Specialized Organs",   frac:0.10, unlock:2,  type:"trait", trait:"t2", val:3,
+    desc:"Each part perfects a single purpose." },
+  { id:"u6",  icon:"♆", name:"Pack Hunting",         frac:0.10, unlock:3,  type:"trait", trait:"t3", val:3,
+    desc:"Many bodies, one intent." },
+  { id:"u7",  icon:"☉", name:"Apex Instinct",        frac:0.20, unlock:3,  type:"prod",  val:2,
+    desc:"Fear becomes something other creatures feel." },
+  { id:"u8",  icon:"⟁", name:"Massive Frame",        frac:0.12, unlock:4,  type:"trait", trait:"t4", val:3,
+    desc:"The earth itself notes your passing." },
+  { id:"u9",  icon:"✧", name:"Spark of Thought",     frac:0.15, unlock:5,  type:"click", val:4,
+    desc:"Before acting — a pause. A plan." },
+  { id:"u10", icon:"࿊", name:"Oral Tradition",       frac:0.18, unlock:6,  type:"prod",  val:2,
+    desc:"Knowledge begins to outlive its knowers." },
+  { id:"u11", icon:"⚘", name:"Agriculture",          frac:0.12, unlock:7,  type:"trait", trait:"t0", val:5,
+    desc:"Life learns to cultivate life." },
+  { id:"u12", icon:"⚙", name:"Industry",             frac:0.14, unlock:7,  type:"trait", trait:"t5", val:3,
+    desc:"Engines of transformation, never sleeping." },
+  { id:"u13", icon:"⊚", name:"Global Network",       frac:0.20, unlock:8,  type:"prod",  val:2.5,
+    desc:"A planet thinks with one mind." },
+  { id:"u14", icon:"✶", name:"Stellar Engineering",  frac:0.18, unlock:9,  type:"click", val:5,
+    desc:"Suns are tools now." },
+  { id:"u15", icon:"∞", name:"Unified Theory",       frac:0.22, unlock:10, type:"prod",  val:3,
+    desc:"The question that began the journey, answered." },
+];
+
+// ---- Achievements: each grants +2% to all production ---------
+const ACHS = [
+  { id:"a_spark", name:"The First Spark",   desc:"Begin to exist.",                 test:()=>S.totalEssence>0 },
+  { id:"a_c100",  name:"Hunger",            desc:"Consume 100 times.",              test:()=>S.clicks>=100 },
+  { id:"a_c1k",   name:"Endless Hunger",    desc:"Consume 1,000 times.",            test:()=>S.clicks>=1000 },
+  { id:"a_b10",   name:"Builder of Forms",  desc:"Acquire 10 traits.",              test:()=>S.bought>=10 },
+  { id:"a_b100",  name:"Architect of Life", desc:"Acquire 100 traits.",             test:()=>S.bought>=100 },
+  { id:"a_t25",   name:"Monoculture",       desc:"Own 25 of a single trait.",       test:()=>Object.values(S.counts).some(c=>c>=25) },
+  { id:"a_e1",    name:"It Lives",          desc:"Reach the First Cell era.",       test:()=>S.stage>=1 },
+  { id:"a_e3",    name:"Red in Tooth",      desc:"Reach the Predator era.",         test:()=>S.stage>=3 },
+  { id:"a_e5",    name:"The Inner Light",   desc:"Reach the Awakening Mind era.",   test:()=>S.stage>=5 },
+  { id:"a_e7",    name:"City Lights",       desc:"Reach the Civilization era.",     test:()=>S.stage>=7 },
+  { id:"a_e9",    name:"Starfarer",         desc:"Reach Interstellar Life.",        test:()=>S.stage>=9 },
+  { id:"a_e10",   name:"Awake",             desc:"Reach Cosmic Awakening.",         test:()=>S.stage>=10 },
+  { id:"a_d100",  name:"Momentum",          desc:"Evolution Drive ×100 or higher.", test:()=>S.drive>=100 },
+  { id:"a_mut5",  name:"Rewritten",         desc:"Hold 5 mutations at once.",       test:()=>Object.keys(S.upgrades).length>=5 },
+  { id:"a_reb",   name:"New Universe",      desc:"Transcend for the first time.",   test:()=>S.rebirths>=1 },
+  { id:"a_sp50",  name:"Constellation",     desc:"Hold 50 Sparks.",                 test:()=>S.sparks>=50 },
+];
+
 // ---- Default state ------------------------------------------
 function freshState(){
   return {
@@ -283,6 +354,13 @@ function freshState(){
     drive: 1,              // global multiplier from evolving
     clickPower: 1,
     counts: TRAITS.reduce((o,t)=>(o[t.id]=0,o),{}),
+    upgrades: {},          // owned mutations (reset on transcend)
+    ach: {},               // unlocked achievements (permanent)
+    sparks: 0,             // prestige currency, +25% production each
+    rebirths: 0,           // transcendence count
+    clicks: 0,
+    bought: 0,
+    muted: false,
     seenChapter: 0,
     lastSave: Date.now(),
   };
@@ -303,11 +381,22 @@ function traitCost(t){ return t.base * Math.pow(t.mult, S.counts[t.id]); }
 function traitProd(t){ return t.prod * S.counts[t.id]; }
 function perSec(){
   let p = 0;
-  for(const t of TRAITS) p += traitProd(t);
-  return p * S.drive * eraBoost();
+  for(const t of TRAITS) p += traitProd(t) * traitMultOf(t.id);
+  return p * S.drive * eraBoost() * prodMultAll() * achMult() * sparkMult();
 }
 function eraBoost(){ return Math.pow(1.6, S.stage); } // each era is intrinsically richer
-function clickGain(){ return (S.clickPower) * S.drive * eraBoost() * (1 + perSec()*0.04); }
+function clickGain(){
+  return S.clickPower * S.drive * eraBoost() * clickMultAll() * achMult() * sparkMult()
+    * (1 + perSec()*0.04);
+}
+// mutation / achievement / spark multipliers
+function eraCostBase(){ const th = era().threshold; return th===Infinity ? 4e15 : th; }
+function upgCost(u){ return u.frac * eraCostBase(); }
+function prodMultAll(){ let m=1; for(const u of UPGRADES) if(S.upgrades[u.id] && u.type==="prod") m*=u.val; return m; }
+function clickMultAll(){ let m=1; for(const u of UPGRADES) if(S.upgrades[u.id] && u.type==="click") m*=u.val; return m; }
+function traitMultOf(id){ let m=1; for(const u of UPGRADES) if(S.upgrades[u.id] && u.type==="trait" && u.trait===id) m*=u.val; return m; }
+function achMult(){ return 1 + 0.02*Object.keys(S.ach).length; }
+function sparkMult(){ return 1 + 0.25*S.sparks; }
 function era(){ return ERAS[S.stage]; }
 function traitName(t){ return t.names[Math.min(S.stage, t.names.length-1)]; }
 function canEvolve(){ return S.stage < ERAS.length-1 && S.lifetime >= era().threshold; }
@@ -322,17 +411,19 @@ let activeTab="traits";
 function buy(t){
   const c = traitCost(t);
   if(S.essence < c) return;
-  S.essence -= c; S.counts[t.id]++;
+  S.essence -= c; S.counts[t.id]++; S.bought++;
+  sfx("buy");
   renderPanel(); flashTrait(t.id);
 }
 function buyMax(t){
   let bought=0;
   while(S.essence >= traitCost(t)){ S.essence -= traitCost(t); S.counts[t.id]++; bought++; if(bought>1000)break; }
-  if(bought) { renderPanel(); }
+  if(bought){ S.bought += bought; sfx("buy"); renderPanel(); }
 }
 function tapOrganism(ev){
   const g = clickGain();
-  S.essence += g; S.lifetime += g; S.totalEssence += g;
+  S.essence += g; S.lifetime += g; S.totalEssence += g; S.clicks++;
+  sfx("click");
   spawnFloat(ev, "+"+fmt(g));
   pulseCell();
   updateReadout();
@@ -348,6 +439,7 @@ function doEvolve(){
   S.clickPower *= 2.0;
   S.essence = 0; S.lifetime = 0;
   for(const t of TRAITS) S.counts[t.id]=0;
+  sfx("evolve");
   showChapter(S.stage);
   save();
   syncTint();
@@ -377,6 +469,10 @@ function updateReadout(){
   $("topEra").textContent = era().name;
   $("topStage").textContent = S.stage+" / "+(ERAS.length-1);
   $("topMult").textContent = "×"+S.drive.toFixed(2);
+  if(S.sparks > 0 || S.rebirths > 0){
+    $("sparkStat").style.display = "";
+    $("topSparks").textContent = "✶ "+S.sparks;
+  }
 }
 
 function tabButtons(){
@@ -388,6 +484,7 @@ function tabButtons(){
 
 function renderPanel(){
   if(activeTab==="traits") renderTraits();
+  else if(activeTab==="mutate") renderMutate();
   else if(activeTab==="evolve") renderEvolve();
   else renderCodex();
 }
@@ -399,7 +496,7 @@ function renderTraits(){
     const cost = traitCost(t);
     const ok = S.essence >= cost;
     const cls = locked ? "locked" : (ok ? "affordable" : "cant");
-    const each = t.prod * S.drive * eraBoost();
+    const each = t.prod * S.drive * eraBoost() * traitMultOf(t.id) * prodMultAll() * achMult() * sparkMult();
     html += `<div class="trait ${cls}" data-buy="${t.id}">
       <div class="icon">${t.icon}</div>
       <div class="body">
@@ -424,7 +521,13 @@ function renderEvolve(){
   let html = `<div class="evolve-card">
     <h3>${last?"The Final Form":"Evolutionary Threshold"}</h3>`;
   if(last){
-    html += `<p>You have reached <b>Cosmic Awakening</b> — the universe contemplating itself through you. There is no higher rung; only endless transformation. Keep accumulating ${e.res}, and let the story continue.</p>`;
+    const g = sparksGain();
+    html += `<p>You have reached <b>Cosmic Awakening</b> — the universe contemplating itself through you. There is no higher rung on this ladder. But a cosmic intelligence can do what nothing before it could: <b>create new universes</b>.</p>
+      <div class="next">Transcending grants <b class="spark">✶ ${g} Sparks</b> — each Spark boosts all production by
+        <b>+25%</b>, in every universe, forever. Earn more ${e.res} before transcending to gain more Sparks.</div>
+      <button class="evolve gold" id="transBtn">Transcend ⟶ Seed a New Universe</button>
+      <div class="next" style="margin-top:10px">Traits, Mutations, Drive and resources are lost.
+        <b class="spark">Sparks</b> and <b style="color:var(--accent)">Achievements</b> carry over.</div>`;
   } else {
     const nxt = ERAS[S.stage+1];
     html += `<p>${e.text}</p>
@@ -437,16 +540,87 @@ function renderEvolve(){
         <b style="color:var(--gold)">Evolution Drive</b> ×2.4 and click power ×2 — permanently.</div>`;
   }
   html += `</div>
-    <div class="codex"><div class="chapter">Current Drive</div>
-      <p>Global production multiplier: <b style="color:var(--gold)">×${S.drive.toFixed(2)}</b><br>
-      Click power: <b style="color:var(--accent)">${fmt(S.clickPower * S.drive * eraBoost())}</b> per tap<br>
-      All-time ${ "Essence" }: <b>${fmt(S.totalEssence)}</b></p></div>`;
+    <div class="codex"><div class="chapter">Current Power</div>
+      <p>Evolution Drive: <b style="color:var(--gold)">×${S.drive.toFixed(2)}</b><br>
+      Mutations: <b style="color:var(--accent2)">×${(prodMultAll()).toFixed(2)}</b> production,
+        <b style="color:var(--accent2)">×${(clickMultAll()).toFixed(2)}</b> click<br>
+      Achievements: <b style="color:var(--accent)">×${achMult().toFixed(2)}</b>
+        (${Object.keys(S.ach).length}/${ACHS.length})<br>
+      Sparks: <b class="spark">×${sparkMult().toFixed(2)}</b> (✶ ${S.sparks})<br>
+      Click power: <b style="color:var(--accent)">${fmt(clickGain())}</b> per tap<br>
+      All-time this universe: <b>${fmt(S.totalEssence)}</b> · Universes seeded: <b>${S.rebirths}</b></p></div>`;
   panel.innerHTML = html;
   const b = $("evolveBtn"); if(b) b.onclick = doEvolve;
+  const tb = $("transBtn"); if(tb) tb.onclick = doTranscend;
+}
+
+function renderMutate(){
+  let html = `<div class="codex"><div class="chapter">Mutations</div>
+    <p style="font-size:12px;color:var(--muted)">One-time rewrites of the lineage, paid in ${era().res}.
+    Mutations survive Evolution — only Transcendence washes them away.</p></div>`;
+  for(const u of UPGRADES){
+    const owned = !!S.upgrades[u.id];
+    const locked = !owned && S.stage < u.unlock;
+    const cost = upgCost(u);
+    const ok = S.essence >= cost;
+    const cls = owned ? "affordable" : locked ? "locked" : (ok ? "affordable" : "cant");
+    const tgt = u.type==="trait" ? TRAITS.find(t=>t.id===u.trait) : null;
+    const eff = u.type==="click" ? `Click power ×${u.val}`
+              : u.type==="prod"  ? `All production ×${u.val}`
+              : `${traitName(tgt)} output ×${u.val}`;
+    html += `<div class="trait ${cls}" data-upg="${u.id}" ${owned?'style="border-color:rgba(255,212,121,.55)"':""}>
+      <div class="icon">${u.icon}</div>
+      <div class="body">
+        <div class="name"><span>${locked?"???":u.name}</span><span class="cnt">${owned?"✓":""}</span></div>
+        <div class="desc">${locked?`Unlocks in Era ${u.unlock}.`:u.desc+` <b style="color:var(--accent)">${eff}</b>`}</div>
+        <div class="cost ${ok?"ok":"no"}">${owned?'<span class="spark">Acquired</span>':locked?"—":fmt(cost)+" "+era().res}</div>
+      </div></div>`;
+  }
+  panel.innerHTML = html;
+  panel.querySelectorAll("[data-upg]").forEach(el=>{
+    const u = UPGRADES.find(x=>x.id===el.dataset.upg);
+    el.onclick = ()=>buyUpgrade(u);
+  });
+}
+function buyUpgrade(u){
+  if(S.upgrades[u.id] || S.stage < u.unlock) return;
+  const c = upgCost(u);
+  if(S.essence < c) return;
+  S.essence -= c; S.upgrades[u.id] = 1;
+  sfx("upg"); toast("Mutation acquired: "+u.name);
+  renderMutate(); updateReadout();
+}
+
+// ---- Transcendence (prestige) --------------------------------
+function sparksGain(){ return Math.floor(20 + Math.sqrt(S.lifetime/1e12)); }
+function doTranscend(){
+  if(S.stage < ERAS.length-1) return;
+  const g = sparksGain();
+  if(!confirm(`Collapse this universe and seed a new one?\n\nYou will gain ✶${g} Sparks (each +25% to all production, forever).\nTraits, Mutations, Drive and resources are lost.\nSparks and Achievements remain.`)) return;
+  S = Object.assign(freshState(), {
+    sparks: S.sparks + g,
+    rebirths: S.rebirths + 1,
+    ach: S.ach, clicks: S.clicks, bought: S.bought, muted: S.muted,
+    seenChapter: ERAS.length - 1,
+  });
+  sfx("transcend");
+  activeTab = "traits"; tabButtons();
+  save(); syncTint(); renderAll();
+  $("bnEra").textContent = "Transcendence " + S.rebirths;
+  $("bnTitle").textContent = "A New Universe";
+  $("bnText").textContent = "The lineage folds inward, compresses into a single point of memory — and blooms again. Matter drifts through a new cosmic ocean. But this time, the void itself remembers. (+"+g+" ✶ Sparks)";
+  $("banner").classList.add("show");
 }
 
 function renderCodex(){
-  let html = `<div class="codex"><div class="chapter">The Lineage</div>`;
+  const got = Object.keys(S.ach).length;
+  let html = `<div class="codex"><div class="chapter">Achievements — ${got}/${ACHS.length}
+    (+${got*2}% to all production)</div><div class="achgrid">`;
+  for(const a of ACHS){
+    const has = !!S.ach[a.id];
+    html += `<div class="ach ${has?"":"locked"}"><div class="an">${has?a.name:"???"}</div><div class="ad">${a.desc}</div></div>`;
+  }
+  html += `</div><div class="chapter">The Lineage</div>`;
   ERAS.forEach((e,i)=>{
     const state = i < S.stage ? "done" : (i===S.stage ? "" : "locked");
     const reveal = i <= S.seenChapter || i===S.stage;
@@ -596,6 +770,7 @@ function tick(now){
   if(gain>0){ S.essence+=gain; S.lifetime+=gain; S.totalEssence+=gain; }
   updateReadout();
   if(activeTab==="traits") refreshTraitAfford();
+  else if(activeTab==="mutate") refreshMutateAfford();
   else if(activeTab==="evolve") refreshEvolveBar();
 }
 function loop(now){ tick(now); setTimeout(()=>loop(performance.now()), 100); }
@@ -612,6 +787,17 @@ function refreshTraitAfford(){
     if(c){ c.classList.toggle("ok",ok); c.classList.toggle("no",!ok); }
   });
 }
+function refreshMutateAfford(){
+  panel.querySelectorAll("[data-upg]").forEach(el=>{
+    const u = UPGRADES.find(x=>x.id===el.dataset.upg);
+    if(S.upgrades[u.id] || S.stage < u.unlock) return;
+    const ok = S.essence >= upgCost(u);
+    el.classList.toggle("affordable", ok);
+    el.classList.toggle("cant", !ok);
+    const c = el.querySelector(".cost");
+    if(c){ c.classList.toggle("ok",ok); c.classList.toggle("no",!ok); }
+  });
+}
 function refreshEvolveBar(){
   const bar=panel.querySelector(".bar");
   if(bar) bar.style.width=(evolveProgress()*100).toFixed(1)+"%";
@@ -624,6 +810,50 @@ function flashTrait(id){
   if(el){ el.style.borderColor="rgba(255,212,121,.8)"; setTimeout(()=>el.style.borderColor="",180); }
   renderTraits();
 }
+
+// ---- Sound: tiny WebAudio synth ------------------------------
+let AC = null;
+function sfx(kind){
+  if(S.muted) return;
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if(AC.state === "suspended") AC.resume();
+    const t0 = AC.currentTime;
+    const tone = (f0, f1, dur, type, gain, delay=0)=>{
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t0+delay);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1,f1), t0+delay+dur);
+      g.gain.setValueAtTime(gain, t0+delay);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+delay+dur);
+      o.connect(g); g.connect(AC.destination);
+      o.start(t0+delay); o.stop(t0+delay+dur);
+    };
+    if(kind==="click")          tone(170, 250, 0.08, "sine", 0.04);
+    else if(kind==="buy")       tone(330, 520, 0.12, "triangle", 0.06);
+    else if(kind==="upg"){      tone(440, 660, 0.18, "triangle", 0.07);
+                                tone(660, 990, 0.28, "sine", 0.05, 0.08); }
+    else if(kind==="ach"){      tone(523, 523, 0.10, "sine", 0.07);
+                                tone(784, 784, 0.20, "sine", 0.06, 0.10); }
+    else if(kind==="evolve"){   tone(220, 880, 0.70, "sine", 0.08);
+                                tone(110, 440, 0.70, "triangle", 0.05); }
+    else if(kind==="transcend"){tone(80, 1280, 1.40, "sine", 0.09);
+                                tone(60, 640, 1.40, "triangle", 0.05);
+                                tone(960, 1920, 0.80, "sine", 0.04, 0.5); }
+  }catch(e){ /* audio unavailable — play on silently */ }
+}
+
+// ---- Achievement checker -------------------------------------
+setInterval(()=>{
+  for(const a of ACHS){
+    if(!S.ach[a.id] && a.test()){
+      S.ach[a.id] = 1;
+      sfx("ach");
+      toast("✦ Achievement: "+a.name+" (+2% production)");
+      if(activeTab==="codex") renderPanel();
+    }
+  }
+}, 1000);
 
 // ---- Save / load --------------------------------------------
 function save(){ S.lastSave=Date.now(); localStorage.setItem("genesis-save", JSON.stringify(S)); }
@@ -645,6 +875,12 @@ function offlineProgress(){
     setTimeout(()=>toast(`While you were away, life continued: +${fmt(gain)} ${era().res}`), 600); }
 }
 
+$("muteBtn").onclick=()=>{
+  S.muted = !S.muted;
+  $("muteBtn").textContent = "Sound: "+(S.muted?"Off":"On");
+  if(!S.muted) sfx("buy");
+  save();
+};
 $("saveBtn").onclick=()=>{ save(); toast("Universe saved."); };
 $("resetBtn").onclick=()=>{
   if(confirm("Erase this lineage and begin again from the void?")){
@@ -658,6 +894,7 @@ addEventListener("beforeunload", save);
 // ---- Boot ---------------------------------------------------
 $("organism").addEventListener("pointerdown", tapOrganism);
 document.addEventListener("keydown", e=>{ if(e.code==="Space"){ e.preventDefault(); tapOrganism(); }});
+$("muteBtn").textContent = "Sound: "+(S.muted?"Off":"On");
 resize(); syncTint(); offlineProgress(); tabButtons(); renderAll();
 if(S.totalEssence===0) showChapter(0);
 requestAnimationFrame(frame);

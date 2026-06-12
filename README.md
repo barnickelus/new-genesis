@@ -17,9 +17,15 @@ then visit `http://localhost:8000`.)
   resource. In the beginning there is only hunger.
 - **Grow.** Spend that resource on **Traits** — generators that produce resource
   automatically. *Shift+click* to buy as many as you can afford.
+- **Mutate.** Buy one-off **Mutations** — a small tech-tree of permanent
+  rewrites (click multipliers, trait boosts, global production). Mutations
+  survive Evolution; only Transcendence washes them away.
 - **Evolve.** Earn enough this era to cross the **Evolutionary Threshold**.
   Evolving resets your traits and resource, but permanently multiplies your
   **Evolution Drive** (×2.4) and click power (×2), and advances the story.
+- **Transcend.** At **Cosmic Awakening**, seed a new universe: everything
+  resets, but you gain **✶ Sparks** — each one boosts all production by +25%,
+  in every universe, forever.
 - **Become.** Climb all 11 eras, each with its own resource, visuals, and a
   chapter of the Genesis narrative:
 
@@ -30,8 +36,12 @@ then visit `http://localhost:8000`.)
 
 - Living, morphing organism rendered on `<canvas>` that grows in complexity each era
 - Drifting-matter starfield that shifts color with your evolutionary stage
+- 16 **Mutations** (one-off upgrades) and 16 **Achievements**, each achievement
+  granting +2% production
+- **Transcendence** prestige layer with permanent ✶ Spark multipliers
+- Procedural sound via WebAudio (no audio files; toggle with the Sound button)
 - Auto-save to `localStorage` (+ capped offline progress at 50% efficiency)
-- A **Codex** that records each chapter of the lineage as you unlock it
+- A **Codex** that records achievements and each chapter of the lineage
 - Fully self-contained — one file, works offline
 
 Begin in the void. End among the stars.

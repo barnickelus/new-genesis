@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Genesis — A Story of Becoming</title>
+<style>
+  :root{
+    --bg:#05060d; --panel:rgba(16,20,38,.72); --panel-edge:rgba(120,150,255,.18);
+    --ink:#e8ecff; --muted:#8a93c4; --accent:#7cf0d0; --accent2:#b48cff; --gold:#ffd479;
+    --good:#6ee7a8; --bad:#ff7a90;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink); overflow:hidden;
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; user-select:none;
+  }
+  canvas#stage{position:fixed; inset:0; z-index:0; display:block}
+
+  /* layout */
+  .app{position:relative; z-index:1; height:100%; display:grid;
+    grid-template-columns:1fr 380px; grid-template-rows:auto 1fr; gap:0;}
+  header{grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; backdrop-filter:blur(6px);
+    background:linear-gradient(180deg,rgba(6,8,18,.85),rgba(6,8,18,0));}
+  .title{display:flex; align-items:baseline; gap:14px}
+  .title h1{font-size:22px; margin:0; letter-spacing:6px; font-weight:600;
+    background:linear-gradient(90deg,var(--accent),var(--accent2),var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent}
+  .title .sub{font-size:12px; color:var(--muted); letter-spacing:2px}
+  .topstats{display:flex; gap:26px; align-items:center}
+  .topstat{text-align:right}
+  .topstat .k{font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase}
+  .topstat .v{font-size:18px; font-weight:600; color:var(--ink)}
+  .topstat .v.accent{color:var(--accent)}
+
+  /* center play area */
+  .play{grid-column:1; position:relative; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:10px; min-height:0}
+  .era-name{font-size:13px; letter-spacing:4px; text-transform:uppercase; color:var(--accent2);
+    margin-bottom:4px}
+  .organism-wrap{position:relative; width:min(46vh,420px); height:min(46vh,420px);
+    display:flex; align-items:center; justify-content:center; cursor:pointer}
+  .organism-wrap canvas{position:absolute; inset:0}
+  .tap-hint{position:absolute; bottom:-30px; font-size:12px; color:var(--muted);
+    letter-spacing:2px; animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}
+  .essence-readout{margin-top:42px; text-align:center}
+  .essence-readout .big{font-size:40px; font-weight:700; letter-spacing:1px;
+    text-shadow:0 0 24px rgba(124,240,208,.35)}
+  .essence-readout .rate{font-size:14px; color:var(--accent); margin-top:2px}
+  .essence-readout .label{font-size:11px; letter-spacing:3px; text-transform:uppercase;
+    color:var(--muted); margin-top:6px}
+
+  /* right rail */
+  .rail{grid-column:2; grid-row:2; display:flex; flex-direction:column; min-height:0;
+    border-left:1px solid var(--panel-edge); background:linear-gradient(180deg,rgba(8,10,22,.5),rgba(8,10,22,.78))}
+  .tabs{display:flex; border-bottom:1px solid var(--panel-edge)}
+  .tab{flex:1; padding:12px 8px; text-align:center; font-size:12px; letter-spacing:2px;
+    text-transform:uppercase; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent}
+  .tab.active{color:var(--ink); border-bottom-color:var(--accent)}
+  .tab:hover{color:var(--ink)}
+  .panel{flex:1; overflow-y:auto; padding:14px 14px 30px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,150,255,.22); border-radius:4px}
+
+  .trait{display:flex; align-items:center; gap:12px; padding:11px 12px; margin-bottom:9px;
+    border:1px solid var(--panel-edge); border-radius:12px; background:var(--panel);
+    cursor:pointer; transition:transform .08s, border-color .15s, background .15s}
+  .trait:hover{border-color:rgba(124,240,208,.5)}
+  .trait.affordable{border-color:rgba(124,240,208,.35)}
+  .trait.locked{opacity:.45; filter:grayscale(.5); cursor:not-allowed}
+  .trait.cant{opacity:.6; cursor:not-allowed}
+  .trait:active{transform:scale(.985)}
+  .trait .icon{width:42px; height:42px; flex:none; border-radius:10px; display:grid; place-items:center;
+    font-size:22px; background:radial-gradient(circle at 30% 30%,rgba(124,240,208,.22),rgba(180,140,255,.12));
+    border:1px solid rgba(124,240,208,.22)}
+  .trait .body{flex:1; min-width:0}
+  .trait .name{font-size:14px; font-weight:600; display:flex; justify-content:space-between; gap:8px}
+  .trait .name .cnt{color:var(--gold); font-variant-numeric:tabular-nums}
+  .trait .desc{font-size:11px; color:var(--muted); margin-top:2px; line-height:1.35}
+  .trait .cost{font-size:13px; margin-top:5px; font-variant-numeric:tabular-nums}
+  .trait .cost.ok{color:var(--good)} .trait .cost.no{color:var(--bad)}
+
+  .evolve-card{border:1px solid rgba(180,140,255,.4); border-radius:14px; padding:16px;
+    background:linear-gradient(160deg,rgba(180,140,255,.16),rgba(124,240,208,.06)); margin-bottom:14px}
+  .evolve-card h3{margin:0 0 6px; font-size:14px; letter-spacing:3px; text-transform:uppercase; color:var(--accent2)}
+  .evolve-card p{margin:0 0 12px; font-size:12.5px; line-height:1.5; color:var(--ink)}
+  .evolve-card .next{font-size:12px; color:var(--muted); margin-bottom:12px}
+  .barwrap{height:9px; border-radius:6px; background:rgba(255,255,255,.07); overflow:hidden; margin-bottom:12px}
+  .bar{height:100%; width:0%; border-radius:6px; transition:width .25s;
+    background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  button.evolve{width:100%; padding:13px; border:0; border-radius:11px; cursor:pointer;
+    font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#08111a;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:filter .15s, opacity .15s}
+  button.evolve:hover{filter:brightness(1.08)}
+  button.evolve:disabled{opacity:.4; cursor:not-allowed; filter:grayscale(.4)}
+
+  .upg{display:inline-flex; flex-direction:column; gap:2px}
+  .codex p{font-size:13px; line-height:1.6; color:var(--ink); margin:0 0 14px}
+  .codex .chapter{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:6px}
+  .codex .era-entry{border-left:2px solid var(--panel-edge); padding-left:12px; margin-bottom:18px}
+  .codex .era-entry.done{border-left-color:var(--accent)}
+  .codex .era-entry.locked{opacity:.4}
+  .codex .era-entry h4{margin:0 0 4px; font-size:13px}
+
+  /* toast / chapter banner */
+  .banner{position:fixed; inset:0; z-index:5; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 40%,rgba(20,10,40,.55),rgba(2,3,8,.92)); backdrop-filter:blur(3px)}
+  .banner.show{display:flex; animation:fade .6s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .banner .card{max-width:560px; text-align:center; padding:30px}
+  .banner .era{font-size:12px; letter-spacing:6px; text-transform:uppercase; color:var(--accent); margin-bottom:10px}
+  .banner h2{font-size:30px; margin:0 0 16px; letter-spacing:2px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2),var(--gold));
+    -webkit-background-clip:text; background-clip:text; color:transparent}
+  .banner p{font-size:15px; line-height:1.7; color:var(--ink); margin:0 0 22px; font-style:italic}
+  .banner button{padding:11px 26px; border:1px solid var(--accent); background:transparent; color:var(--accent);
+    border-radius:10px; cursor:pointer; letter-spacing:3px; text-transform:uppercase; font-size:12px}
+  .banner button:hover{background:rgba(124,240,208,.12)}
+
+  .toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px);
+    z-index:6; background:var(--panel); border:1px solid var(--panel-edge); padding:10px 18px;
+    border-radius:10px; font-size:13px; opacity:0; transition:.3s; pointer-events:none}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  .footer-controls{position:fixed; bottom:12px; left:14px; z-index:3; display:flex; gap:8px}
+  .footer-controls button{background:var(--panel); border:1px solid var(--panel-edge); color:var(--muted);
+    font-size:11px; padding:6px 11px; border-radius:8px; cursor:pointer; letter-spacing:1px}
+  .footer-controls button:hover{color:var(--ink); border-color:var(--accent)}
+
+  .float{position:absolute; pointer-events:none; font-weight:700; font-size:18px; color:var(--accent);
+    text-shadow:0 0 10px rgba(124,240,208,.6); animation:floatUp 1s ease-out forwards; z-index:4}
+  @keyframes floatUp{from{opacity:1; transform:translateY(0)}to{opacity:0; transform:translateY(-46px)}}
+
+  @media (max-width:880px){
+    .app{grid-template-columns:1fr; grid-template-rows:auto auto 1fr}
+    .play{grid-column:1; grid-row:2}
+    .rail{grid-column:1; grid-row:3; border-left:0; border-top:1px solid var(--panel-edge)}
+    .topstats{gap:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="app">
+  <header>
+    <div class="title">
+      <h1>GENESIS</h1>
+      <span class="sub">a story of becoming</span>
+    </div>
+    <div class="topstats">
+      <div class="topstat"><div class="k">Era</div><div class="v accent" id="topEra">The Void</div></div>
+      <div class="topstat"><div class="k">Lineage Depth</div><div class="v" id="topStage">0 / 10</div></div>
+      <div class="topstat"><div class="k">Evolution Drive</div><div class="v" id="topMult">×1.00</div></div>
+    </div>
+  </header>
+
+  <section class="play">
+    <div class="era-name" id="eraName">The Void</div>
+    <div class="organism-wrap" id="organism">
+      <canvas id="cell"></canvas>
+      <div class="tap-hint" id="tapHint">tap to consume</div>
+    </div>
+    <div class="essence-readout">
+      <div class="big" id="essence">0</div>
+      <div class="rate" id="rate">0 / sec</div>
+      <div class="label" id="resName">Essence</div>
+    </div>
+  </section>
+
+  <aside class="rail">
+    <div class="tabs">
+      <div class="tab active" data-tab="traits">Traits</div>
+      <div class="tab" data-tab="evolve">Evolve</div>
+      <div class="tab" data-tab="codex">Codex</div>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+</div>
+
+<div class="banner" id="banner">
+  <div class="card">
+    <div class="era" id="bnEra">Era</div>
+    <h2 id="bnTitle">Title</h2>
+    <p id="bnText">...</p>
+    <button id="bnBtn">Continue</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="footer-controls">
+  <button id="saveBtn">Save</button>
+  <button id="resetBtn">Reset Universe</button>
+</div>
+
+<script>
+/* ============================================================
+   GENESIS — a single-file evolution idle game
+   From a spark of life to cosmic awakening.
+   ============================================================ */
+
+// ---- Eras: the spine of the narrative -----------------------
+const ERAS = [
+  { name:"The Void",          res:"Essence",      tint:"#5fd0ff",
+    title:"A Spark in the Void",
+    text:"Matter drifts through an endless cosmic ocean, lifeless and indifferent. Then — a spark. A single living cell, fragile and insignificant, carrying the first possibility of becoming something more.",
+    threshold: 250 },
+  { name:"First Cell",        res:"Biomass",      tint:"#6ee7a8",
+    title:"The First Hunger",
+    text:"Life begins as a struggle to survive. The smallest forms consume and are consumed. Every success is temporary, every adaptation a new challenge. Yet life persists. It learns. It changes.",
+    threshold: 6e3 },
+  { name:"Multicellular",     res:"Tissue",       tint:"#9be36e",
+    title:"From Simplicity, Complexity",
+    text:"Cells bind to cells. Specialization emerges. What was once a lonely speck becomes an organism — a coordinated whole, greater than the sum of its parts.",
+    threshold: 1.2e5 },
+  { name:"The Predator",      res:"Vitality",     tint:"#ffcf5f",
+    title:"Instinct Sharpens",
+    text:"Organisms become predators. To consume is to thrive. Speed, teeth, and cunning are written into flesh. Survival begins to give rise to ambition.",
+    threshold: 2.6e6 },
+  { name:"The Titan",         res:"Dominion",     tint:"#ff9d5f",
+    title:"Titans Walk",
+    text:"Predators become titans, reshaping the very ecosystems they were born into. Strength reaches its limit — and at that limit, something new flickers awake: awareness.",
+    threshold: 6e7 },
+  { name:"Awakening Mind",    res:"Cognition",    tint:"#ff7a90",
+    title:"The Inner Light",
+    text:"Instinct slowly transforms into awareness. The creature begins to model the world, to remember, to imagine. Ambition gives rise to intelligence.",
+    threshold: 1.4e9 },
+  { name:"The Tribe",         res:"Bonds",        tint:"#c47cff",
+    title:"No Creature Alone",
+    text:"A truth is discovered: no creature, however strong, can overcome the universe alone. Cooperation becomes the next evolutionary leap. Colonies emerge. Tribes form.",
+    threshold: 3.5e10 },
+  { name:"Civilization",      res:"Culture",      tint:"#9b8cff",
+    title:"The Story of Civilization",
+    text:"Societies rise from the chaos of nature. They bend rivers, move mountains, and craft myths to explain their origin — and technologies powerful enough to challenge them.",
+    threshold: 9e11 },
+  { name:"Planetary Mind",    res:"Noosphere",    tint:"#7cf0d0",
+    title:"A World Awake",
+    text:"Entire planets become living networks of intelligence. Biological evolution gives way to cultural evolution. Species transform not through mutation, but through ideas.",
+    threshold: 2.5e13 },
+  { name:"Interstellar Life", res:"Starseed",     tint:"#7cd0ff",
+    title:"The Stars Call",
+    text:"Life spreads beyond its birthplace, carrying the memory of every stage before it. The first cell, the first predator, the first city — all echoes in a lineage stretching across the cosmos.",
+    threshold: 8e14 },
+  { name:"Cosmic Awakening",  res:"Genesis",      tint:"#ffffff",
+    title:"The Universe Awakening to Itself",
+    text:"At the highest complexity, life confronts the mystery that began its journey: why does anything evolve at all? Beyond survival, beyond intelligence — evolution is the universe awakening to itself. The story of that awakening is yours to continue.",
+    threshold: Infinity },
+];
+
+// ---- Traits (generators). Names shift flavor by era band ----
+const TRAITS = [
+  { id:"t0", icon:"⟡", base:15,    mult:1.15, prod:0.15,  unlock:0,
+    names:["Mote","Membrane","Cell Wall","Claw","Limb","Synapse","Kinship","Settlement","Network Node","Probe","Quantum Seed"],
+    desc:"The smallest unit of becoming." },
+  { id:"t1", icon:"❂", base:120,   mult:1.16, prod:1.1,   unlock:0,
+    names:["Ripple","Mitochondrion","Tissue","Fang","Sinew","Memory","Family","Village","Datasphere","Lightsail","Star Forge"],
+    desc:"Turns raw matter into steady growth." },
+  { id:"t2", icon:"✦", base:1400,  mult:1.17, prod:9,     unlock:1,
+    names:["Current","Organelle","Organ","Pack","Herd","Language","Tribe","City","Continent Mind","Colony Ship","Nebula Womb"],
+    desc:"Coordinated structures, working as one." },
+  { id:"t3", icon:"❖", base:18000, mult:1.18, prod:70,    unlock:2,
+    names:["Eddy","Colony","System","Territory","Migration","Dream","Council","Nation","Biosphere AI","Dyson Bloom","Galaxy Garden"],
+    desc:"Whole systems bend to your will." },
+  { id:"t4", icon:"⬡", base:2.2e5, mult:1.19, prod:540,   unlock:4,
+    names:["Vortex","Tissue Mass","Body Plan","Apex Form","Ecosystem","Insight","Federation","Empire","Planetary Will","Star Cluster","Cosmic Lattice"],
+    desc:"An architecture of immense scale." },
+  { id:"t5", icon:"✺", base:3e6,   mult:1.20, prod:4200,  unlock:6,
+    names:["Singularity Mote","Gene Choir","Hive","Titan Brood","Living Storm","Vision","Civilizational Mythos","Grand Project","Awakened World","Interstellar Web","Universe Seed"],
+    desc:"Forces that reshape reality itself." },
+];
+
+// ---- Default state ------------------------------------------
+function freshState(){
+  return {
+    essence: 0,
+    lifetime: 0,           // essence earned this era (gates evolution)
+    totalEssence: 0,       // all-time, for fun
+    stage: 0,              // index into ERAS
+    drive: 1,              // global multiplier from evolving
+    clickPower: 1,
+    counts: TRAITS.reduce((o,t)=>(o[t.id]=0,o),{}),
+    seenChapter: 0,
+    lastSave: Date.now(),
+  };
+}
+let S = load() || freshState();
+
+// ---- Number formatting --------------------------------------
+const UNITS = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","UDc","DDc","TDc"];
+function fmt(n){
+  if(n < 1000) return (n>=100||Number.isInteger(n)) ? Math.floor(n).toString()
+                  : n.toFixed(n<10?2:1);
+  let t=0; while(n>=1000 && t<UNITS.length-1){ n/=1000; t++; }
+  return n.toFixed(n<10?2:n<100?1:0)+UNITS[t];
+}
+
+// ---- Economy helpers ----------------------------------------
+function traitCost(t){ return t.base * Math.pow(t.mult, S.counts[t.id]); }
+function traitProd(t){ return t.prod * S.counts[t.id]; }
+function perSec(){
+  let p = 0;
+  for(const t of TRAITS) p += traitProd(t);
+  return p * S.drive * eraBoost();
+}
+function eraBoost(){ return Math.pow(1.6, S.stage); } // each era is intrinsically richer
+function clickGain(){ return (S.clickPower) * S.drive * eraBoost() * (1 + perSec()*0.04); }
+function era(){ return ERAS[S.stage]; }
+function traitName(t){ return t.names[Math.min(S.stage, t.names.length-1)]; }
+function canEvolve(){ return S.stage < ERAS.length-1 && S.lifetime >= era().threshold; }
+function evolveProgress(){ return Math.min(1, S.lifetime / era().threshold); }
+
+// ---- DOM refs -----------------------------------------------
+const $ = id => document.getElementById(id);
+const panel=$("panel"), toastEl=$("toast");
+let activeTab="traits";
+
+// ---- Buying / clicking --------------------------------------
+function buy(t){
+  const c = traitCost(t);
+  if(S.essence < c) return;
+  S.essence -= c; S.counts[t.id]++;
+  renderPanel(); flashTrait(t.id);
+}
+function buyMax(t){
+  let bought=0;
+  while(S.essence >= traitCost(t)){ S.essence -= traitCost(t); S.counts[t.id]++; bought++; if(bought>1000)break; }
+  if(bought) { renderPanel(); }
+}
+function tapOrganism(ev){
+  const g = clickGain();
+  S.essence += g; S.lifetime += g; S.totalEssence += g;
+  spawnFloat(ev, "+"+fmt(g));
+  pulseCell();
+  updateReadout();
+  if(activeTab==="evolve") renderPanel();
+}
+
+// ---- Evolve -------------------------------------------------
+function doEvolve(){
+  if(!canEvolve()) return;
+  S.stage++;
+  // Evolution drive grows with the magnitude of what you achieved.
+  S.drive *= 2.4;
+  S.clickPower *= 2.0;
+  S.essence = 0; S.lifetime = 0;
+  for(const t of TRAITS) S.counts[t.id]=0;
+  showChapter(S.stage);
+  save();
+  syncTint();
+  renderAll();
+}
+
+// ---- Chapter banner -----------------------------------------
+function showChapter(i){
+  const e = ERAS[i];
+  $("bnEra").textContent = "Era "+i+" — "+e.name;
+  $("bnTitle").textContent = e.title;
+  $("bnText").textContent = e.text;
+  $("banner").classList.add("show");
+  S.seenChapter = Math.max(S.seenChapter, i);
+}
+$("bnBtn").onclick = ()=> $("banner").classList.remove("show");
+
+// ---- Rendering ----------------------------------------------
+function renderAll(){ updateReadout(); renderPanel(); syncTint(); }
+
+function updateReadout(){
+  $("essence").textContent = fmt(S.essence);
+  const ps = perSec();
+  $("rate").textContent = fmt(ps)+" / sec";
+  $("resName").textContent = era().res;
+  $("eraName").textContent = era().name;
+  $("topEra").textContent = era().name;
+  $("topStage").textContent = S.stage+" / "+(ERAS.length-1);
+  $("topMult").textContent = "×"+S.drive.toFixed(2);
+}
+
+function tabButtons(){
+  document.querySelectorAll(".tab").forEach(b=>{
+    b.classList.toggle("active", b.dataset.tab===activeTab);
+    b.onclick = ()=>{ activeTab=b.dataset.tab; tabButtons(); renderPanel(); };
+  });
+}
+
+function renderPanel(){
+  if(activeTab==="traits") renderTraits();
+  else if(activeTab==="evolve") renderEvolve();
+  else renderCodex();
+}
+
+function renderTraits(){
+  let html="";
+  for(const t of TRAITS){
+    const locked = S.stage < t.unlock && S.counts[t.id]===0;
+    const cost = traitCost(t);
+    const ok = S.essence >= cost;
+    const cls = locked ? "locked" : (ok ? "affordable" : "cant");
+    const each = t.prod * S.drive * eraBoost();
+    html += `<div class="trait ${cls}" data-buy="${t.id}">
+      <div class="icon">${t.icon}</div>
+      <div class="body">
+        <div class="name"><span>${locked?"??? (locked)":traitName(t)}</span><span class="cnt">${S.counts[t.id]}</span></div>
+        <div class="desc">${locked?`Unlocks in Era ${t.unlock}.`:`${t.desc} <b style="color:var(--accent)">+${fmt(each)}/s</b> each`}</div>
+        <div class="cost ${ok?"ok":"no"}">${locked?"—":fmt(cost)+" "+era().res}</div>
+      </div></div>`;
+  }
+  panel.innerHTML = html;
+  panel.querySelectorAll("[data-buy]").forEach(el=>{
+    const t = TRAITS.find(x=>x.id===el.dataset.buy);
+    el.onclick = (e)=>{ if(S.stage < t.unlock && S.counts[t.id]===0) return;
+      (e.shiftKey ? buyMax : buy)(t); };
+  });
+}
+
+function renderEvolve(){
+  const e = era();
+  const last = S.stage >= ERAS.length-1;
+  const prog = evolveProgress();
+  const ready = canEvolve();
+  let html = `<div class="evolve-card">
+    <h3>${last?"The Final Form":"Evolutionary Threshold"}</h3>`;
+  if(last){
+    html += `<p>You have reached <b>Cosmic Awakening</b> — the universe contemplating itself through you. There is no higher rung; only endless transformation. Keep accumulating ${e.res}, and let the story continue.</p>`;
+  } else {
+    const nxt = ERAS[S.stage+1];
+    html += `<p>${e.text}</p>
+      <div class="next">Next era: <b style="color:var(--accent2)">${nxt.name}</b> — requires
+        <b>${fmt(e.threshold)} ${e.res}</b> earned this era.</div>
+      <div class="barwrap"><div class="bar" style="width:${(prog*100).toFixed(1)}%"></div></div>
+      <div class="next">${fmt(S.lifetime)} / ${fmt(e.threshold)} &nbsp;(${(prog*100).toFixed(1)}%)</div>
+      <button class="evolve" id="evolveBtn" ${ready?"":"disabled"}>${ready?"Evolve ⟶ "+nxt.name:"Not yet ready"}</button>
+      <div class="next" style="margin-top:10px">Evolving resets your traits &amp; ${e.res}, but multiplies your
+        <b style="color:var(--gold)">Evolution Drive</b> ×2.4 and click power ×2 — permanently.</div>`;
+  }
+  html += `</div>
+    <div class="codex"><div class="chapter">Current Drive</div>
+      <p>Global production multiplier: <b style="color:var(--gold)">×${S.drive.toFixed(2)}</b><br>
+      Click power: <b style="color:var(--accent)">${fmt(S.clickPower * S.drive * eraBoost())}</b> per tap<br>
+      All-time ${ "Essence" }: <b>${fmt(S.totalEssence)}</b></p></div>`;
+  panel.innerHTML = html;
+  const b = $("evolveBtn"); if(b) b.onclick = doEvolve;
+}
+
+function renderCodex(){
+  let html = `<div class="codex"><div class="chapter">The Lineage</div>`;
+  ERAS.forEach((e,i)=>{
+    const state = i < S.stage ? "done" : (i===S.stage ? "" : "locked");
+    const reveal = i <= S.seenChapter || i===S.stage;
+    html += `<div class="era-entry ${state}">
+      <h4>${reveal?`Era ${i}: ${e.name}`:`Era ${i}: ????`}</h4>
+      <p style="font-size:12px;color:var(--muted)">${reveal?e.text:"Not yet remembered."}</p>
+    </div>`;
+  });
+  html += `</div>`;
+  panel.innerHTML = html;
+}
+
+// ---- Floating click text ------------------------------------
+function spawnFloat(ev, txt){
+  const f = document.createElement("div");
+  f.className="float"; f.textContent=txt;
+  const r = $("organism").getBoundingClientRect();
+  const x = (ev && ev.clientX!=null) ? ev.clientX : r.left+r.width/2;
+  const y = (ev && ev.clientY!=null) ? ev.clientY : r.top+r.height/2;
+  f.style.left=(x-10)+"px"; f.style.top=(y-10)+"px";
+  document.body.appendChild(f);
+  setTimeout(()=>f.remove(), 1000);
+}
+function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.classList.remove("show"),2200); }
+
+// ============================================================
+//  Visuals — starfield background + the living organism
+// ============================================================
+const bg = $("stage"), bx = bg.getContext("2d");
+const cellCanvas = $("cell"), cx = cellCanvas.getContext("2d");
+let stars=[], W=0, H=0, cellPulse=0, t=0, curTint="#5fd0ff";
+
+function resize(){
+  W = bg.width = innerWidth; H = bg.height = innerHeight;
+  const r = $("organism").getBoundingClientRect();
+  cellCanvas.width = r.width; cellCanvas.height = r.height;
+  if(stars.length===0){
+    for(let i=0;i<220;i++) stars.push({
+      x:Math.random()*W, y:Math.random()*H, z:Math.random(),
+      s:Math.random()*1.6+0.3
+    });
+  }
+}
+addEventListener("resize", resize);
+
+function syncTint(){ curTint = era().tint; }
+
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+
+function drawBG(){
+  bx.fillStyle="#05060d"; bx.fillRect(0,0,W,H);
+  // drifting matter
+  const [r,g,b] = hexToRgb(curTint);
+  for(const st of stars){
+    st.x += (0.06+st.z*0.18); if(st.x>W) st.x=0;
+    const tw = 0.5 + 0.5*Math.sin(t*0.002 + st.x);
+    bx.globalAlpha = 0.25 + st.z*0.6*tw;
+    bx.fillStyle = st.z>0.7 ? `rgb(${r},${g},${b})` : "#aab6ff";
+    bx.fillRect(st.x, st.y, st.s, st.s);
+  }
+  bx.globalAlpha=1;
+  // central glow that grows with stage
+  const cxp=W*0.42, cyp=H*0.52, rad = 120 + S.stage*26;
+  const grad = bx.createRadialGradient(cxp,cyp,0,cxp,cyp,rad*3);
+  grad.addColorStop(0,`rgba(${r},${g},${b},0.10)`);
+  grad.addColorStop(1,"rgba(0,0,0,0)");
+  bx.fillStyle=grad; bx.fillRect(0,0,W,H);
+}
+
+function drawCell(){
+  const w=cellCanvas.width, h=cellCanvas.height;
+  cx.clearRect(0,0,w,h);
+  if(!w) return;
+  const cxp=w/2, cyp=h/2;
+  const [r,g,b]=hexToRgb(curTint);
+  const breathe = 1 + 0.04*Math.sin(t*0.04);
+  const pulse = 1 + cellPulse*0.18;
+  const baseR = Math.min(w,h)*0.30 * breathe * pulse;
+  const complexity = 3 + S.stage; // more lobes as life advances
+
+  // outer aura
+  const aura = cx.createRadialGradient(cxp,cyp,baseR*0.4,cxp,cyp,baseR*2.2);
+  aura.addColorStop(0,`rgba(${r},${g},${b},0.35)`);
+  aura.addColorStop(1,"rgba(0,0,0,0)");
+  cx.fillStyle=aura; cx.beginPath(); cx.arc(cxp,cyp,baseR*2.2,0,7); cx.fill();
+
+  // organic body (wobbling polygon)
+  cx.beginPath();
+  const pts=80;
+  for(let i=0;i<=pts;i++){
+    const a=(i/pts)*Math.PI*2;
+    const wob = 1 + 0.10*Math.sin(a*complexity + t*0.05) + 0.05*Math.sin(a*(complexity+3) - t*0.03);
+    const rr = baseR*wob;
+    const x=cxp+Math.cos(a)*rr, y=cyp+Math.sin(a)*rr;
+    i?cx.lineTo(x,y):cx.moveTo(x,y);
+  }
+  cx.closePath();
+  const body = cx.createRadialGradient(cxp-baseR*0.3,cyp-baseR*0.3,baseR*0.1,cxp,cyp,baseR*1.3);
+  body.addColorStop(0,`rgba(${Math.min(255,r+60)},${Math.min(255,g+60)},${Math.min(255,b+60)},0.95)`);
+  body.addColorStop(0.6,`rgba(${r},${g},${b},0.7)`);
+  body.addColorStop(1,`rgba(${r*0.4|0},${g*0.4|0},${b*0.4|0},0.55)`);
+  cx.fillStyle=body; cx.fill();
+  cx.lineWidth=2; cx.strokeStyle=`rgba(${r},${g},${b},0.9)`; cx.stroke();
+
+  // internal structures — nucleus / organelles / nodes scale with stage
+  const nodes = Math.min(2 + S.stage, 12);
+  for(let i=0;i<nodes;i++){
+    const a = t*0.02 + i*(Math.PI*2/nodes);
+    const dist = baseR*0.5*(0.4+0.6*((i%3)/2));
+    const x=cxp+Math.cos(a)*dist, y=cyp+Math.sin(a)*dist;
+    const nr = baseR*0.13*(1+0.3*Math.sin(t*0.06+i));
+    cx.beginPath(); cx.arc(x,y,nr,0,7);
+    cx.fillStyle=`rgba(255,255,255,${0.25+0.2*Math.sin(t*0.05+i)})`;
+    cx.fill();
+  }
+  // nucleus
+  cx.beginPath(); cx.arc(cxp,cyp,baseR*0.22,0,7);
+  cx.fillStyle="rgba(255,255,255,0.85)"; cx.fill();
+
+  // orbiting particles once intelligence/civilization arrives
+  if(S.stage>=5){
+    const orbits = Math.min(S.stage-3, 7);
+    for(let i=0;i<orbits;i++){
+      const a=t*0.03*(i%2?1:-1)+i;
+      const orad=baseR*(1.4+i*0.12);
+      const x=cxp+Math.cos(a)*orad, y=cyp+Math.sin(a)*orad*0.55;
+      cx.beginPath(); cx.arc(x,y,2.4,0,7);
+      cx.fillStyle=`rgba(${r},${g},${b},0.9)`; cx.fill();
+    }
+  }
+  if(cellPulse>0) cellPulse=Math.max(0, cellPulse-0.06);
+}
+function pulseCell(){ cellPulse=1; }
+
+function frame(){
+  t++;
+  drawBG(); drawCell();
+  requestAnimationFrame(frame);
+}
+
+// ---- Main loop: production ----------------------------------
+let lastTick=performance.now();
+function tick(now){
+  const dt=(now-lastTick)/1000; lastTick=now;
+  const gain = perSec()*dt;
+  if(gain>0){ S.essence+=gain; S.lifetime+=gain; S.totalEssence+=gain; }
+  updateReadout();
+  if(activeTab==="traits") refreshTraitAfford();
+  else if(activeTab==="evolve") refreshEvolveBar();
+}
+function loop(now){ tick(now); setTimeout(()=>loop(performance.now()), 100); }
+
+// lightweight refreshers (avoid full re-render every tick)
+function refreshTraitAfford(){
+  panel.querySelectorAll("[data-buy]").forEach(el=>{
+    const t=TRAITS.find(x=>x.id===el.dataset.buy);
+    if(S.stage < t.unlock && S.counts[t.id]===0) return;
+    const ok=S.essence>=traitCost(t);
+    el.classList.toggle("affordable", ok);
+    el.classList.toggle("cant", !ok);
+    const c=el.querySelector(".cost");
+    if(c){ c.classList.toggle("ok",ok); c.classList.toggle("no",!ok); }
+  });
+}
+function refreshEvolveBar(){
+  const bar=panel.querySelector(".bar");
+  if(bar) bar.style.width=(evolveProgress()*100).toFixed(1)+"%";
+  const btn=$("evolveBtn");
+  if(btn){ const ready=canEvolve(); btn.disabled=!ready;
+    if(ready && S.stage<ERAS.length-1) btn.textContent="Evolve ⟶ "+ERAS[S.stage+1].name; }
+}
+function flashTrait(id){
+  const el=panel.querySelector(`[data-buy="${id}"]`);
+  if(el){ el.style.borderColor="rgba(255,212,121,.8)"; setTimeout(()=>el.style.borderColor="",180); }
+  renderTraits();
+}
+
+// ---- Save / load --------------------------------------------
+function save(){ S.lastSave=Date.now(); localStorage.setItem("genesis-save", JSON.stringify(S)); }
+function load(){
+  try{
+    const raw=localStorage.getItem("genesis-save"); if(!raw) return null;
+    const d=JSON.parse(raw);
+    const base=freshState();
+    Object.assign(base, d);
+    base.counts = Object.assign(freshState().counts, d.counts||{});
+    return base;
+  }catch(e){ return null; }
+}
+function offlineProgress(){
+  if(!S.lastSave) return;
+  const secs=Math.min((Date.now()-S.lastSave)/1000, 60*60*8); // cap 8h
+  const gain=perSec()*secs*0.5; // offline at 50% efficiency
+  if(gain>1){ S.essence+=gain; S.lifetime+=gain; S.totalEssence+=gain;
+    setTimeout(()=>toast(`While you were away, life continued: +${fmt(gain)} ${era().res}`), 600); }
+}
+
+$("saveBtn").onclick=()=>{ save(); toast("Universe saved."); };
+$("resetBtn").onclick=()=>{
+  if(confirm("Erase this lineage and begin again from the void?")){
+    localStorage.removeItem("genesis-save"); S=freshState(); syncTint(); renderAll();
+    showChapter(0); toast("A new spark appears...");
+  }
+};
+setInterval(save, 15000);
+addEventListener("beforeunload", save);
+
+// ---- Boot ---------------------------------------------------
+$("organism").addEventListener("pointerdown", tapOrganism);
+document.addEventListener("keydown", e=>{ if(e.code==="Space"){ e.preventDefault(); tapOrganism(); }});
+resize(); syncTint(); offlineProgress(); tabButtons(); renderAll();
+if(S.totalEssence===0) showChapter(0);
+requestAnimationFrame(frame);
+loop(performance.now());
+</script>
+</body>
+</html>

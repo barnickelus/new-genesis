@@ -480,17 +480,20 @@ const panel=$("panel"), toastEl=$("toast");
 let activeTab="traits";
 
 // ---- Buying / clicking --------------------------------------
+function isLocked(t){ return S.stage < t.unlock && S.counts[t.id]===0; }
 function buy(t){
+  if(isLocked(t)) return;
   const c = traitCost(t);
   if(S.essence < c) return;
   S.essence -= c; S.counts[t.id]++; S.bought++;
   sfx("buy");
-  renderPanel(); flashTrait(t.id);
+  flashTrait(t.id);            // renders the panel once, then flashes the new element
 }
 function buyMax(t){
-  let bought=0;
-  while(S.essence >= traitCost(t)){ S.essence -= traitCost(t); S.counts[t.id]++; bought++; if(bought>1000)break; }
-  if(bought){ S.bought += bought; sfx("buy"); renderPanel(); }
+  if(isLocked(t)) return;
+  let bought=0, c;
+  while(S.essence >= (c = traitCost(t))){ S.essence -= c; S.counts[t.id]++; bought++; if(bought>1000)break; }
+  if(bought){ S.bought += bought; sfx("buy"); renderTraits(); }
 }
 function tapOrganism(ev){
   const g = clickGain();
@@ -564,7 +567,7 @@ function renderPanel(){
 function renderTraits(){
   let html="";
   for(const t of TRAITS){
-    const locked = S.stage < t.unlock && S.counts[t.id]===0;
+    const locked = isLocked(t);
     const cost = traitCost(t);
     const ok = S.essence >= cost;
     const cls = locked ? "locked" : (ok ? "affordable" : "cant");
@@ -580,8 +583,7 @@ function renderTraits(){
   panel.innerHTML = html;
   panel.querySelectorAll("[data-buy]").forEach(el=>{
     const t = TRAITS.find(x=>x.id===el.dataset.buy);
-    el.onclick = (e)=>{ if(S.stage < t.unlock && S.counts[t.id]===0) return;
-      (e.shiftKey ? buyMax : buy)(t); };
+    el.onclick = (e)=>{ (e.shiftKey ? buyMax : buy)(t); };  // buy/buyMax self-guard against locks
   });
 }
 
@@ -878,9 +880,10 @@ function refreshEvolveBar(){
     if(ready && S.stage<ERAS.length-1) btn.textContent="Evolve ⟶ "+ERAS[S.stage+1].name; }
 }
 function flashTrait(id){
+  renderTraits();             // rebuild first so we flash the element that's actually on screen
   const el=panel.querySelector(`[data-buy="${id}"]`);
-  if(el){ el.style.borderColor="rgba(255,212,121,.8)"; setTimeout(()=>el.style.borderColor="",180); }
-  renderTraits();
+  if(el){ el.style.borderColor="rgba(255,212,121,.8)";
+    setTimeout(()=>{ if(el.isConnected) el.style.borderColor=""; },180); }
 }
 
 // ---- Sound: tiny WebAudio synth ------------------------------
